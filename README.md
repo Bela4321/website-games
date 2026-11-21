@@ -11,7 +11,7 @@ Each tic-tac-toe room is a Durable Object; players connect over WebSockets.
 npm install
 npm test          # runs inside the Workers runtime (Miniflare)
 npm run dev       # local server on http://localhost:8787
-npm run deploy    # wrangler deploy
+npm run deploy    # manual deploy; pushes to main deploy automatically (Workers Builds)
 ```
 
 Free plan, no servers, no database: an idle room hibernates, an empty room

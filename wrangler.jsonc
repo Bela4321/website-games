@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "games",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-15",
+  "observability": { "enabled": true },
+
+  // Temporary: served on <name>.<subdomain>.workers.dev until belaschinke.com
+  // is a Cloudflare zone. Then swap these two lines for:
+  //   "workers_dev": false,
+  //   "routes": [{ "pattern": "games.belaschinke.com", "custom_domain": true }],
+  "workers_dev": true,
+
+  "durable_objects": {
+    "bindings": [{ "name": "TICTACTOE_ROOM", "class_name": "TicTacToeRoom" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TicTacToeRoom"] }],
+
+  "vars": {
+    "ALLOWED_ORIGINS": "https://belaschinke.com,https://www.belaschinke.com,http://localhost:5173",
+    // how long a disconnected player's seat (and the game) is held for them
+    "SEAT_GRACE_SECONDS": "120"
+  }
+}

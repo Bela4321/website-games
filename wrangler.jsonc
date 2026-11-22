@@ -12,9 +12,15 @@
   "workers_dev": true,
 
   "durable_objects": {
-    "bindings": [{ "name": "TICTACTOE_ROOM", "class_name": "TicTacToeRoom" }]
+    "bindings": [
+      { "name": "TICTACTOE_ROOM", "class_name": "TicTacToeRoom" },
+      { "name": "LOBBY", "class_name": "Lobby" }
+    ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TicTacToeRoom"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["TicTacToeRoom"] },
+    { "tag": "v2", "new_sqlite_classes": ["Lobby"] }
+  ],
 
   "vars": {
     "ALLOWED_ORIGINS": "https://belaschinke.com,https://www.belaschinke.com,https://website.belaschinke.workers.dev,https://*-website.belaschinke.workers.dev,http://localhost:5173",

@@ -9,8 +9,8 @@ let roomCounter = 0;
 const freshRoom = () => `room-${++roomCounter}-${crypto.randomUUID().slice(0, 8)}`;
 
 /** Opens a socket to a room and exposes its messages as an async queue. */
-async function connect(room: string, name: string, pid: string = crypto.randomUUID()) {
-  const res = await SELF.fetch(`https://games.test/tictactoe/${room}?name=${encodeURIComponent(name)}&pid=${pid}`, {
+async function connect(room: string, name: string, pid: string = crypto.randomUUID(), extra = "") {
+  const res = await SELF.fetch(`https://games.test/tictactoe/${room}?name=${encodeURIComponent(name)}&pid=${pid}${extra}`, {
     headers: { Upgrade: "websocket", Origin: ORIGIN },
   });
   expect(res.status).toBe(101);
@@ -314,5 +314,70 @@ describe("tic-tac-toe room", () => {
     // the old player id no longer holds anything: a fresh room
     const back = await connect(room, "Ada", first.pid);
     expect((await back.nextState()).status).toBe("waiting");
+  });
+});
+
+describe("lobby", () => {
+  const lobby = async (path = "") => {
+    const res = await SELF.fetch(`https://games.test/lobby${path}`, { headers: { Origin: ORIGIN } });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe(ORIGIN);
+    return res.json() as Promise<any>;
+  };
+
+  it("lists a public room while its host waits, and drops it once full", async () => {
+    const room = freshRoom();
+    const a = await connect(room, "Ada Lobby", undefined, "&public=1");
+    await a.nextState();
+    let view = await lobby();
+    expect(view.open).toContainEqual({ room, host: "Ada Lobby" });
+    expect(view.names).toContain("Ada Lobby");
+    expect(await lobby(`/rooms/${room}`)).toEqual({ exists: true });
+
+    const b = await connect(room, "Bob Lobby");
+    await b.nextState();
+    view = await lobby();
+    expect(view.open.map((o: any) => o.room)).not.toContain(room);
+    expect(view.names).toEqual(expect.arrayContaining(["Ada Lobby", "Bob Lobby"]));
+  });
+
+  it("never lists a private room, but still knows it exists", async () => {
+    const room = freshRoom();
+    const a = await connect(room, "Cy Private");
+    await a.nextState();
+    expect((await lobby()).open.map((o: any) => o.room)).not.toContain(room);
+    expect(await lobby(`/rooms/${room}`)).toEqual({ exists: true });
+  });
+
+  it("only the first player decides whether a room is public", async () => {
+    const room = freshRoom();
+    const a = await connect(room, "Dee");
+    await a.nextState();
+    a.ws.close(1000);
+    await new Promise((r) => setTimeout(r, 100));
+    // empty again: the next host decides
+    const b = await connect(room, "Eve", undefined, "&public=1");
+    await b.nextState();
+    expect((await lobby()).open).toContainEqual({ room, host: "Eve" });
+  });
+
+  it("forgets a room when its last player leaves", async () => {
+    const room = freshRoom();
+    const a = await connect(room, "Fay", undefined, "&public=1");
+    await a.nextState();
+    a.ws.close(1000);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(await lobby(`/rooms/${room}`)).toEqual({ exists: false });
+  });
+
+  it("hands out a free three-digit room", async () => {
+    const { room } = await lobby("/free-room");
+    expect(room).toMatch(/^[1-9][0-9]{2}$/);
+    expect(await lobby(`/rooms/${room}`)).toEqual({ exists: false });
+  });
+
+  it("rejects bad room names", async () => {
+    const res = await SELF.fetch("https://games.test/lobby/rooms/has%20space", { headers: { Origin: ORIGIN } });
+    expect(res.status).toBe(400);
   });
 });

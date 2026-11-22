@@ -17,6 +17,9 @@ import { applyMove, newGame, other, type Game, type Mark } from "./tictactoe";
  * close (code 1000, i.e. the client pressed "leave") frees the seat at once.
  * A new pairing always starts a fresh game.
  *
+ * The first player in an empty room decides whether it is listed in the
+ * lobby (?public=1); the room reports its seats to the lobby after each change.
+ *
  * Client -> server:  {type:"move", cell:0..8} | {type:"rematch"} | "ping"
  * Server -> client:  {type:"state", ...} | {type:"error", code, message} | "pong"
  */
@@ -37,6 +40,10 @@ interface Stored {
   game: Game;
   rematch: Mark[];
   seats: Partial<Record<Mark, Seat>>;
+  /** the room's name, as the lobby knows it */
+  room?: string;
+  /** listed in the lobby's open rooms while a player waits */
+  public?: boolean;
 }
 
 export type ClientState = {
@@ -85,6 +92,7 @@ export class TicTacToeRoom extends DurableObject<Env> {
     const name = cleanName(params.get("name"));
     const rawPid = params.get("pid") ?? "";
     const pid = PID.test(rawPid) ? rawPid : crypto.randomUUID();
+    const room = request.headers.get("X-Room-Name") ?? this.stored.room;
     const { 0: client, 1: server } = new WebSocketPair();
     this.ctx.acceptWebSocket(server);
     const ok = new Response(null, { status: 101, webSocket: client });
@@ -100,7 +108,7 @@ export class TicTacToeRoom extends DurableObject<Env> {
       }
       server.serializeAttachment({ mark: own, pid } satisfies Attachment);
       seats[own] = { pid, name, leftAt: null };
-      await this.save({ ...this.stored, seats });
+      await this.save({ ...this.stored, seats, room });
       this.broadcast();
       return ok;
     }
@@ -122,11 +130,13 @@ export class TicTacToeRoom extends DurableObject<Env> {
     }
 
     server.serializeAttachment({ mark, pid } satisfies Attachment);
+    // whoever opens an empty room decides whether it is listed
+    const isPublic = Object.keys(seats).length === 0 ? params.get("public") === "1" : this.stored.public;
     seats[mark] = { pid, name, leftAt: null };
     const opponent = seats[other(mark)];
     // a new pairing starts a fresh game
     const next = opponent ? { game: newGame(randomMark()), rematch: [] } : this.stored;
-    await this.save({ ...next, seats });
+    await this.save({ ...next, seats, room, public: isPublic });
     this.broadcast();
     return ok;
   }
@@ -181,8 +191,10 @@ export class TicTacToeRoom extends DurableObject<Env> {
   /** Clears a room nobody has been connected to for a while. */
   async alarm(): Promise<void> {
     if (this.sockets().length > 0) return;
+    const room = this.stored.room;
     await this.ctx.storage.deleteAll();
     this.stored = fresh();
+    if (room) await this.lobby().report(room, { public: false, names: [], open: false });
   }
 
   // ---------------------------------------------------------------------------
@@ -224,6 +236,30 @@ export class TicTacToeRoom extends DurableObject<Env> {
   private async save(next: Stored): Promise<void> {
     this.stored = next;
     await this.ctx.storage.put("state", next);
+    await this.reportToLobby();
+  }
+
+  private lobby() {
+    return this.env.LOBBY.get(this.env.LOBBY.idFromName("lobby"));
+  }
+
+  /** Tells the lobby who sits here now (players gone past their grace count as gone). */
+  private async reportToLobby(): Promise<void> {
+    const { room, seats } = this.stored;
+    if (!room) return;
+    const now = Date.now();
+    const present = MARKS.map((m) => seats[m]).filter(
+      (s): s is Seat => !!s && (s.leftAt == null || now - s.leftAt < this.graceMs),
+    );
+    try {
+      await this.lobby().report(room, {
+        public: !!this.stored.public,
+        names: present.map((s) => s.name),
+        open: present.length === 1 && present[0].leftAt == null,
+      });
+    } catch {
+      /* the lobby is a convenience: a game never fails because of it */
+    }
   }
 
   private broadcast(): void {

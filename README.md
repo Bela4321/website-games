@@ -3,8 +3,7 @@
 Game servers for [belaschinke.com](https://belaschinke.com), running as a Cloudflare Worker.
 Each tic-tac-toe room is a Durable Object; players connect over WebSockets.
 
-- Live: `wss://games.belaschinke.workers.dev/tictactoe/<room>?name=<name>&pid=<player id>`
-  (moves to `games.belaschinke.com` once the domain is on Cloudflare)
+- Live: `wss://games.belaschinke.com/tictactoe/<room>?name=<name>&pid=<player id>`
 - Protocol and seat rules: see the comment at the top of `src/room.ts`
 
 ```sh

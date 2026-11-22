@@ -5,8 +5,8 @@
   "compatibility_date": "2026-11-15",
   "observability": { "enabled": true },
 
-  // games.belaschinke.com; the workers.dev address stays on as a fallback
-  "workers_dev": true,
+  // only games.belaschinke.com; the workers.dev address is off
+  "workers_dev": false,
   "routes": [{ "pattern": "games.belaschinke.com", "custom_domain": true }],
 
   "durable_objects": {
@@ -21,7 +21,7 @@
   ],
 
   "vars": {
-    "ALLOWED_ORIGINS": "https://belaschinke.com,https://www.belaschinke.com,https://website.belaschinke.workers.dev,https://*-website.belaschinke.workers.dev,http://localhost:5173,http://localhost:4173",
+    "ALLOWED_ORIGINS": "https://belaschinke.com,https://www.belaschinke.com,http://localhost:5173,http://localhost:4173",
     // how long a disconnected player's seat (and the game) is held for them
     "SEAT_GRACE_SECONDS": "120"
   }
